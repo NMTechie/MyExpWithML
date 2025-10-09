@@ -64,3 +64,30 @@ arr = df.values  # or df.to_numpy()
 "A Pandas DataFrame can be created from a NumPy 2D array."
 
 "They are similar in shape and structure, but a DataFrame is more powerful for labeled data."
+
+
+❓ **Question:** What is the difference between Feature Construction vs Feature Extraction in Feature Engineering
+
+🧠 **Answer:** 
+
+🧩 Feature Construction
+
+Definition:
+Feature Construction means creating new features from the existing raw data — usually using domain knowledge or logical combinations of existing features.
+
+Goal:
+To enhance the dataset by adding meaningful, interpretable features that improve model performance.
+
+⚙️ Feature Extraction
+
+Definition:
+Feature Extraction means transforming existing features into a new, lower-dimensional representation — usually by applying mathematical or statistical techniques.
+
+Goal:
+To reduce dimensionality and capture essential information from raw data, especially high-dimensional data like images, text, or signals.
+
+🎯 In Short
+
+Feature Construction: Add new features → enrich data.
+
+Feature Extraction: Compress features → simplify data.

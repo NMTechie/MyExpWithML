@@ -91,3 +91,86 @@ To reduce dimensionality and capture essential information from raw data, especi
 Feature Construction: Add new features → enrich data.
 
 Feature Extraction: Compress features → simplify data.
+
+
+❓ **Question:** What is the difference between Feature Construction vs Feature Extraction in Feature Engineering
+
+🧠 **Answer:** 
+
+Excellent question — standardization and normalization are both feature scaling techniques used in machine learning to make sure features contribute equally to the model, but they do it in different ways and are used for different reasons.
+
+Let’s break them down clearly:
+
+🔹 1. Standardization (Z-score normalization)
+
+Definition:
+Transforms data so that it has: Mean = 0 Standard deviation = 1
+
+Formula: 
+$$
+x' = x-\mu/\sigma
+$$
+> where
+x = original value
+μ = mean of the feature
+σ = standard deviation of the feature
+
+
+
+Effect:
+
+The data is centered around zero.
+
+It keeps the original shape (distribution) of the data but rescales it.
+
+Works well even if data isn’t bounded or is normally distributed.
+
+Typical use cases:
+
+Linear models (e.g., Linear/Logistic Regression)
+
+PCA (Principal Component Analysis)
+
+SVM, K-Means, etc.
+
+Any algorithm that assumes Gaussian-like distributions or uses distances.
+
+🔹 2. Normalization (Min–Max scaling)
+
+Definition:
+Rescales features to a specific range, usually [0, 1] (or sometimes [-1, 1]).
+
+Formula:
+$$
+x'=x-x_{\min}/x_{\max}-x_{\min}
+$$
+> where $x_{\min}$  and $x_{\max}$ are the minimum and maximum of that feature.
+
+Effect:
+
+All values fall within the same range.
+
+Sensitive to outliers (a single extreme value can skew the scale).
+
+Typical use cases:
+
+Neural networks (e.g., when using sigmoid or tanh activations)
+
+Algorithms that depend on magnitude or bounded inputs (e.g., gradient descent)
+
+Image processing, where pixel values are scaled to [0,1].
+
+🔸 Quick Comparison Table
+| Aspect                    | **Standardization**                  | **Normalization**                     |
+| ------------------------- | ------------------------------------ | ------------------------------------- |
+| Formula                   | ((x - \mu) / \sigma)                 | ((x - x_{min}) / (x_{max} - x_{min})) |
+| Range                     | Unbounded                            | [0, 1] (or [-1, 1])                   |
+| Handles outliers well?    | ✅ Better                             | ❌ Sensitive                           |
+| Keeps distribution shape? | ✅ Yes (shifts & scales)              | ⚠️ Distorts if outliers exist         |
+| Typical algorithms        | SVM, PCA, Linear/Logistic Regression | Neural Nets, kNN, Image data          |
+
+✅ Rule of Thumb
+
+Use standardization when the algorithm assumes or benefits from normally distributed data.
+
+Use normalization when the algorithm is sensitive to the scale of data (especially bounded domains).

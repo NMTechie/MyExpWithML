@@ -174,3 +174,35 @@ Image processing, where pixel values are scaled to [0,1].
 Use standardization when the algorithm assumes or benefits from normally distributed data.
 
 Use normalization when the algorithm is sensitive to the scale of data (especially bounded domains).
+
+
+
+❓ **Question:** why we always do a train test split before do any operation in sci-kit-learn
+
+🧠 **Answer:** That’s a really good question — and it gets to the heart of how to avoid data leakage when using machine learning libraries like scikit-learn (I think that’s what you meant by “aci kit learn” 😊).
+
+Let’s break it down:
+
+🧠 Why We Do a Train–Test Split Before Any Operation
+
+In machine learning, we want to evaluate how well our model generalizes to new, unseen data.
+To do this properly, we split our dataset into two (or sometimes three) parts:
+
+Training set: used to fit (train) the model.
+
+Test set: used only once at the end to evaluate performance.
+
+⚠️ The Problem: Data Leakage
+
+If you perform preprocessing before splitting, your test data can “leak” information into your model.
+
+Example:
+
+Suppose you:
+
+Scale your data using StandardScaler() (which computes mean and std from all samples)
+
+Then split into train and test sets.
+
+Now the test data has influenced the scaler’s mean and variance.
+This means your model indirectly saw information from the test set during training — which makes your evaluation overly optimistic.

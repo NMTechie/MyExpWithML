@@ -138,3 +138,41 @@ def build_dataloaders(
         raise Exception(f"Error in building dataloaders: {e}")
     finally:
         print("Finished building dataloaders")
+
+
+def make_adding(n: int, T: int, seed: int) -> Tuple[np.ndarray, np.ndarray]:
+    """Generate the adding-problem dataset exactly as specified by the assignment.
+
+    Each sequence has 2 channels: a random value in [0, 1) and a marker
+    channel with exactly two 1s, one in each half of the sequence. The
+    target is the sum of the two marked values.
+    """
+    try:
+        rng = np.random.default_rng(seed)
+        x = np.zeros((n, T, 2), dtype=np.float32)
+        x[:, :, 0] = rng.random((n, T))
+        i1 = rng.integers(0, T // 2, n)
+        i2 = rng.integers(T // 2, T, n)
+        x[np.arange(n), i1, 1] = 1
+        x[np.arange(n), i2, 1] = 1
+        y = x[np.arange(n), i1, 0] + x[np.arange(n), i2, 0]
+        return x, y.astype(np.float32)
+    except Exception as e:
+        raise Exception(f"Error generating adding-problem data: {e}")
+    finally:
+        print(
+            f"Finished generating adding-problem data for T={T}, n={n}, seed={seed}")
+
+
+class AddingDataset(Dataset):
+    """Wraps adding-problem sequences and regression targets."""
+
+    def __init__(self, x: np.ndarray, y: np.ndarray) -> None:
+        self.x = torch.from_numpy(x).float()   # (N, T, 2)
+        self.y = torch.from_numpy(y).float()   # (N,)
+
+    def __len__(self) -> int:
+        return len(self.x)
+
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        return self.x[idx], self.y[idx]

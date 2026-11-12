@@ -133,6 +133,7 @@ env.bak/
 venv.bak/
 NumPyNPandasExpEnv/
 PracticalHandsOnML/
+TheRealDNNExp/TheRealDNNExpEnv/
 
 # Spyder project settings
 .spyderproject
@@ -176,3 +177,6 @@ poetry.toml
 pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/python
+
+# Project Specific Folders
+TheRealDNNExp/Data/

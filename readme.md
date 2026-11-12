@@ -2,6 +2,10 @@
 - https://rapidapi.com/ for free API for data 
 
 # Little about pythons 
+💡To install anything with winget please use "--scope machine" with **_admin context_**. This will make the installtion machine wide and easy to manage from installation and uninstalltion perspective.
+```powershell
+winget install --id Python.Pyton.3.14 --scope machine
+```
 💡To upgrade python version from winget, please check which are the version(s) that are available
 ```powershell
 # List all Python installations

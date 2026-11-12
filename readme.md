@@ -22,6 +22,11 @@ This required by doing this in mind of MLDLC or MLOPS. It provides neat segregat
 - First run python -m venv PutYourEnvName
 - then go inside PutYourEnvName\scripts\ and run activate.ps1
 
+#### *Select the Interpreter of your venv*
+- After activating the venv , pres cntrl+shift+P to open the command pallet 
+- Choose your venv\scripts\python.exe as the interpreter
+- This instruct which python interpreter you want to use through your venv for compiling and run python.
+
 #### *How to run jupyter notebook from virtual environment in side VS Code*
 Running a Jupyter Notebook from a virtual environment in VS Code is straightforward — you just need to ensure that:
 >

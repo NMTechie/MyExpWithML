@@ -127,3 +127,59 @@ class MyGRUCell(nn.Module):
         n_t = torch.tanh(x_n + r_t * h_n)
         h_t = (1.0 - z_t) * n_t + z_t * h_prev  # (batch, h)
         return h_t
+
+class HARClassifier(nn.Module):
+    """HAR sequence classifier: a single recurrent layer + linear head.
+
+    Reads all 128 time steps and classifies from the final hidden state.
+    """
+
+    def __init__(self, cell_type: str, input_size: int, hidden_size: int, num_classes: int) -> None:
+        super().__init__()
+        cell_type = cell_type.lower()
+        if cell_type == "rnn":
+            self.rnn = nn.RNN(input_size, hidden_size, batch_first=True)
+        elif cell_type == "lstm":
+            self.rnn = nn.LSTM(input_size, hidden_size, batch_first=True)
+        elif cell_type == "gru":
+            self.rnn = nn.GRU(input_size, hidden_size, batch_first=True)
+        else:
+            raise ValueError(f"Unknown cell_type: {cell_type}")
+        self.cell_type = cell_type
+        self.classifier = nn.Linear(hidden_size, num_classes)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """x: (batch, seq_len, input_size) -> logits: (batch, num_classes)."""
+        _, state = self.rnn(x)
+        # (1, batch, hidden_size)
+        h_n = state[0] if self.cell_type == "lstm" else state
+        last_hidden = h_n[-1]              # (batch, hidden_size)
+        logits = self.classifier(last_hidden)  # (batch, num_classes)
+        return logits
+
+
+class AddingRegressor(nn.Module):
+    """Adding-problem regressor: a single recurrent layer + scalar output head."""
+
+    def __init__(self, cell_type: str, input_size: int, hidden_size: int) -> None:
+        super().__init__()
+        cell_type = cell_type.lower()
+        if cell_type == "rnn":
+            self.rnn = nn.RNN(input_size, hidden_size, batch_first=True)
+        elif cell_type == "lstm":
+            self.rnn = nn.LSTM(input_size, hidden_size, batch_first=True)
+        elif cell_type == "gru":
+            self.rnn = nn.GRU(input_size, hidden_size, batch_first=True)
+        else:
+            raise ValueError(f"Unknown cell_type: {cell_type}")
+        self.cell_type = cell_type
+        self.head = nn.Linear(hidden_size, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """x: (batch, seq_len, input_size) -> predictions: (batch,)."""
+        _, state = self.rnn(x)
+        h_n = state[0] if self.cell_type == "lstm" else state  # (1, batch, hidden_size)
+        last_hidden = h_n[-1]                      # (batch, hidden_size)
+        pred = self.head(last_hidden).squeeze(-1)  # (batch,)
+        return pred
+

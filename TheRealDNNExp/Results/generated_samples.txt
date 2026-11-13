@@ -1,0 +1,61 @@
+=== Temperature 0.2 (top_k=40) ===
+
+
+
+AUTOLYCUS:
+I do not the see the son the bear of the proclaim
+And the the state of the prove of the counters.
+
+LUCIO:
+I was the prove of the man of the shall be so much
+And the state of the proclaiment of the changed
+Of the straight of the proclaiment of the world,
+Which the prince of the seasons and the wars
+And the death of the heaven the contraction
+Where is the shall be the shall be the prove
+And the shall be the sensess and the shall be the world.
+
+CORIOLANUS:
+I will not be the duke of the
+
+=== Temperature 0.8 (top_k=40) ===
+
+I consent to the news the red that down,
+And so, and the common well, will not fear.
+
+GREPET:
+Well, come is a sick follower, to it thy brother's.
+
+HENRY BOLINGBROKE:
+O, and Henry, he is well were him such a crown,
+To save and with to thee more mind said,
+Where in the king destructe, be brother well.
+
+GREGORY:
+The ready speak peace help to her she hungling
+To the made at the present for a love
+Than sand now the spress: the Duke of Marcius
+As I was as so take upon my honour's blands,
+Stand we in t
+
+=== Temperature 1.5 (top_k=40) ===
+
+JULET:
+Hence Did, Tybalt, muddital.
+The but consul yet me, and by lap will.
+If That revells well. Gocest;, be MicRENCE:
+Hean, you'ld storow.
+
+CORIOLANUS:
+Mask prome my hand-He.
+
+VALINIUS:
+O brunkshic sue wilt we as yes neeed?
+To wordst 'elm; hye we I have a soven!--for it destrust
+
+TENSIO:
+He causes too be't lord,,
+To dipp-sepentie tonguesss or earth,
+To briety Hockin again; and summot alls
+Ob.' 'whaT'sneded:s as Yolk, so Streasy Marcius!
+For Wamatess, take unhoardshoakel's-blanks, gidam. We'll.

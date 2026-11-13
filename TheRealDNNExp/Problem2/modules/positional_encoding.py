@@ -54,7 +54,16 @@ class LearnedPositionalEncoding(nn.Module):
 
 
 class NoPositionalEncoding(nn.Module):
-    """Identity module -- used as the 'none' arm of the Task A ablation."""
+    """Identity module -- used as the 'none' arm of the Task A ablation.
+
+    Accepts (and ignores) d_model/max_len so it matches the constructor
+    signature of SinusoidalPositionalEncoding/LearnedPositionalEncoding --
+    this lets POSITIONAL_ENCODINGS[mode](d_model=..., max_len=...) in
+    har_encoder.py call all three variants uniformly.
+    """
+
+    def __init__(self, d_model: int = 0, max_len: int = 0) -> None:
+        super().__init__()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x

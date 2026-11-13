@@ -65,3 +65,21 @@ P1.5b,gru,999,128,0.9110960298608755,0.9117560182278203,,54150,0.260149780909220
 P1.5c,rnn,42,200,,,0.16848202049732208,4417,0.48371681372324626,,,"Gradient-clipping ablation (clip_norm=1.0), h=64"
 P1.5c,rnn,123,200,,,0.18253427743911743,4417,0.47809037963549295,,,"Gradient-clipping ablation (clip_norm=1.0), h=64"
 P1.5c,rnn,999,200,,,0.16808563470840454,4417,0.4830555399258932,,,"Gradient-clipping ablation (clip_norm=1.0), h=64"
+P2.3,transformer_pos-none,42,128,0.9175432643366135,0.9168540774168524,,803590,1.3362504720687867,,,"HAR encoder classifier, patch_len=8, d=128, heads=4, layers=4, pos=none"
+P2.3,transformer_pos-none,123,128,0.9270444519850696,0.9262461009118811,,803590,1.3363414367039999,,,"HAR encoder classifier, patch_len=8, d=128, heads=4, layers=4, pos=none"
+P2.3,transformer_pos-none,999,128,0.9202578893790295,0.9201308392392181,,803590,1.3311116059621175,,,"HAR encoder classifier, patch_len=8, d=128, heads=4, layers=4, pos=none"
+P2.3,transformer_pos-sinusoidal,42,128,0.9032914828639295,0.9017449275620094,,803590,1.3320796807607016,,,"HAR encoder classifier, patch_len=8, d=128, heads=4, layers=4, pos=sinusoidal"
+P2.3,transformer_pos-sinusoidal,123,128,0.9100780454699695,0.9091506831918407,,803590,1.3408350308736166,,,"HAR encoder classifier, patch_len=8, d=128, heads=4, layers=4, pos=sinusoidal"
+P2.3,transformer_pos-sinusoidal,999,128,0.9172039362063115,0.9178633317610112,,803590,1.3435330311457316,,,"HAR encoder classifier, patch_len=8, d=128, heads=4, layers=4, pos=sinusoidal"
+P2.3,transformer_pos-learned,42,128,0.8863250763488293,0.8888820109217722,,805766,1.3697959740956624,,,"HAR encoder classifier, patch_len=8, d=128, heads=4, layers=4, pos=learned"
+P2.3,transformer_pos-learned,123,128,0.9141499830335935,0.9146452429786245,,805766,1.3477473338445027,,,"HAR encoder classifier, patch_len=8, d=128, heads=4, layers=4, pos=learned"
+P2.3,transformer_pos-learned,999,128,0.9226331862911435,0.9222389011407747,,805766,1.355564546585083,,,"HAR encoder classifier, patch_len=8, d=128, heads=4, layers=4, pos=learned"
+P2.4,transformer_char_lm,42,128,,,,810049,17.577400302886964,1.6024090051651,2.3117875252275075,"Tiny Shakespeare char LM, d=128 heads=4 layers=4 context=128, max_iters=5000, eval_interval=500 (sec_per_epoch = sec per 500-iteration block, not a full-corpus epoch)"
+P2.5b,transformer_heads1,42,128,,,,810049,14.043847560882568,1.7592179775238037,2.5380150520163034,"Heads ablation, d=128 fixed, n_heads=1, max_iters=2000"
+P2.5b,transformer_heads4,42,128,,,,810049,17.041341543197632,1.7638118267059326,2.5446425754499526,"Heads ablation, d=128 fixed, n_heads=4, max_iters=2000"
+P2.5b,transformer_heads8,42,128,,,,810049,21.017647802829742,1.7837164402008057,2.5733588626298176,"Heads ablation, d=128 fixed, n_heads=8, max_iters=2000"
+P2.5c,transformer_no_mask,42,128,,,,810049,16.343697011470795,0.01847483031451702,0.026653546076018796,"No-mask ablation, max_iters=2000; loss looks great but generation should fail"
+P2.5d,transformer_timing,,64,,,,,0.016099262237548827,,,peak_mem_MB=110.6
+P2.5d,transformer_timing,,128,,,,,0.015299797058105469,,,peak_mem_MB=160.5
+P2.5d,transformer_timing,,256,,,,,0.020779943466186522,,,peak_mem_MB=297.7
+P2.5d,transformer_timing,,512,,,,,0.05821681022644043,,,peak_mem_MB=751.9

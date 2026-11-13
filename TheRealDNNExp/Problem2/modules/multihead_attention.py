@@ -4,7 +4,7 @@ Reuses scaled_dot_product_attention/causal_mask directly so there is a single
 source of truth for the attention math (verified by the Task 1 unit tests).
 """
 
-from typing import Optional
+from typing import Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -43,11 +43,20 @@ class MultiHeadAttention(nn.Module):
         x = x.transpose(1, 2).contiguous()      # (B, T, H, d_k)
         return x.view(batch, seq_len, self.d_model)  # (B, T, d_model)
 
-    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        mask: Optional[torch.Tensor] = None,
+        return_weights: bool = False,
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """x: (B, T, d_model) -> (B, T, d_model). Self-attention only (encoder use case).
 
         mask: None, or (T, T) boolean (True = keep, False = block); broadcasts
         against (B, n_heads, T, T) attention scores.
+
+        return_weights=True additionally returns the (B, n_heads, T, T)
+        attention weights (used for the Step 6 attention heatmaps); default
+        False preserves the exact return type used by every earlier step.
         """
         batch, seq_len, _ = x.shape
 
@@ -55,9 +64,12 @@ class MultiHeadAttention(nn.Module):
         k = self._split_heads(self.W_K(x), batch, seq_len)  # (B, H, T, d_k)
         v = self._split_heads(self.W_V(x), batch, seq_len)  # (B, H, T, d_k)
 
-        attn_out = scaled_dot_product_attention(
-            q, k, v, mask=mask)  # (B, H, T, d_k)
-        merged = self._merge_heads(
-            attn_out, batch, seq_len)         # (B, T, d_model)
-        # (B, T, d_model)
-        return self.W_O(merged)
+        if return_weights:
+            attn_out, weights = scaled_dot_product_attention(
+                q, k, v, mask=mask, return_weights=True)  # (B,H,T,d_k), (B,H,T,T)
+            merged = self._merge_heads(attn_out, batch, seq_len)  # (B, T, d_model)
+            return self.W_O(merged), weights
+        else:
+            attn_out = scaled_dot_product_attention(q, k, v, mask=mask)  # (B, H, T, d_k)
+            merged = self._merge_heads(attn_out, batch, seq_len)         # (B, T, d_model)
+            return self.W_O(merged)                                     # (B, T, d_model)

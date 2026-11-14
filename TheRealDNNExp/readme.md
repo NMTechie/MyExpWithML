@@ -45,6 +45,7 @@
     - [6. Very Low Loss Without a Causal Mask Was Misleading](#6-very-low-loss-without-a-causal-mask-was-misleading)
     - [7. Context-Length Scaling Was Not Fully Quadratic](#7-context-length-scaling-was-not-fully-quadratic)
     - [8. Model Checkpoints Are Not Included](#8-model-checkpoints-are-not-included)
+    - [9. Generation of requirements.txt](#9-generation-of-requirementstxt)
 
 ## Student Details
 
@@ -613,3 +614,40 @@ A likely explanation is that, for the tested model size (`d = 128`, 4 layers), s
 The assignment instructions explicitly state that trained model checkpoints should not be included in the final submission.
 
 Most training runs were executed using Google Colab, and the resulting model checkpoints were stored in Google Drive during experimentation. These checkpoint files were not downloaded or included in the repository or final submission package. All reported results can be reproduced by running the provided notebooks with the documented configurations and random seeds.
+
+---
+
+### 9. Generation of requirements.txt
+As I have flipped from the local to colab and vice versa. Also my code is segregated between `.py` and `.ipynb` files. So I did not find a best way of generating requirements.txt which is full proof. Thus invented my own way of doing the same. Giving the code block below but removed from the actual files to make it clean.
+```python
+# IPython magic: captures stdout of `pip freeze` as a list, kept in memory only
+freeze_output = !pip freeze
+
+freeze_versions = {}
+for line in freeze_output:
+    if "==" in line:
+        pkg, ver = line.split("==", 1)
+        freeze_versions[pkg.lower()] = ver
+
+# import name -> actual PyPI distribution name (differs for sklearn and colab)
+IMPORT_TO_DIST = {
+    "numpy": "numpy",
+    "pandas": "pandas",
+    "sklearn": "scikit-learn",
+    "matplotlib": "matplotlib",
+    "seaborn": "seaborn",
+    "torch": "torch",
+    "google.colab": "google-colab",
+}
+
+print("Pip-installed packages:")
+for import_name, dist_name in IMPORT_TO_DIST.items():
+    version = freeze_versions.get(dist_name.lower(), "NOT FOUND")
+    print(f"  {import_name:15s} -> {dist_name:15s} {version}")
+
+import sys
+
+print("\nNot separately pip-installed (no version to look up this way):")
+print(f"  torch.nn.functional -> submodule of torch, same version as torch above")
+print(f"  math, time, urllib, zipfile -> Python standard library, version = Python {sys.version.split()[0]}")
+```

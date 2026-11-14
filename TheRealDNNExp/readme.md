@@ -7,11 +7,44 @@
   - [Environment](#environment)
   - [Execution Order](#execution-order)
     - [Run problem1.ipynb](#run-problem1ipynb)
+        - [Project Structure](#project-structure)
+        - [Parameter Counts and Bias Terms](#parameter-counts-and-bias-terms)
     - [Run problem2.ipynb](#run-problem2ipynb)
+        - [Project Structure](#project-structure-1)
+        - [Step 2 – Attention From Scratch (P2.1)](#step-2--attention-from-scratch-p21)
+        - [Step 3 – Multi-Head Attention and Encoder Block (P2.2)](#step-3--multi-head-attention-and-encoder-block-p22)
+        - [Step 4 – HAR Transformer Classifier and Positional-Encoding Ablation (P2.3)](#step-4--har-transformer-classifier-and-positional-encoding-ablation-p23)
+        - [Step 5 – Character-Level Language Model on Tiny Shakespeare (P2.4)](#step-5--character-level-language-model-on-tiny-shakespeare-p24)
+          - [Temperature = 0.2](#temperature--02)
+          - [Temperature = 0.8](#temperature--08)
+          - [Temperature = 1.5](#temperature--15)
+        - [Step 6 – Analysis and Ablations (P2.5)](#step-6--analysis-and-ablations-p25)
+          - [Attention Heatmaps](#attention-heatmaps)
+          - [Number of Attention Heads](#number-of-attention-heads)
+          - [Removing the Causal Mask](#removing-the-causal-mask)
+          - [Context-Length Scaling](#context-length-scaling)
+        - [Engineering Note](#engineering-note)
   - [Results](#results)
   - [Runtime](#runtime)
   - [Assumptions](#assumptions)
+    - [1. Hidden Size, Model Dimension, and Random Seeds](#1-hidden-size-model-dimension-and-random-seeds)
+    - [2. Adding-Problem Training Budget](#2-adding-problem-training-budget)
+    - [3. Gradient-Norm Analysis Sample Size](#3-gradient-norm-analysis-sample-size)
+    - [4. Individual Ablation Selection](#4-individual-ablation-selection)
+    - [5. Selection of the Best HAR Model](#5-selection-of-the-best-har-model)
+    - [6. Positional-Encoding Ablation Budget](#6-positional-encoding-ablation-budget)
+    - [7. Top-k Sampling Configuration](#7-top-k-sampling-configuration)
+    - [8. Ablation Training Budget for Transformer Experiments](#8-ablation-training-budget-for-transformer-experiments)
+    - [9. Tiny Shakespeare Train/Validation Split](#9-tiny-shakespeare-trainvalidation-split)
   - [Known Limitations](#known-limitations)
+    - [1. Gradient Clipping Had Limited Impact on RNN Performance](#1-gradient-clipping-had-limited-impact-on-rnn-performance)
+    - [2. Long-Range Gradients Become Extremely Small for All Models](#2-long-range-gradients-become-extremely-small-for-all-models)
+    - [3. LSTM Performance Declined at the Longest Sequence Length](#3-lstm-performance-declined-at-the-longest-sequence-length)
+    - [4. Transformer Performance Came at a Much Higher Cost](#4-transformer-performance-came-at-a-much-higher-cost)
+    - [5. Head-Count Ablation Used a Reduced Training Budget](#5-head-count-ablation-used-a-reduced-training-budget)
+    - [6. Very Low Loss Without a Causal Mask Was Misleading](#6-very-low-loss-without-a-causal-mask-was-misleading)
+    - [7. Context-Length Scaling Was Not Fully Quadratic](#7-context-length-scaling-was-not-fully-quadratic)
+    - [8. Model Checkpoints Are Not Included](#8-model-checkpoints-are-not-included)
 
 ## Student Details
 
@@ -39,36 +72,67 @@ Layers: 4
 
 ## Environment
 
-Python: 3.12.10 (this is what I have locally; Problem 1 actually ran on Google Colab's T4 GPU runtime, so the exact PyTorch/NumPy/pandas build there could differ slightly)
+Python: 3.12.10 (this is what I have locally); While ran on Google Colab's T4 GPU runtime, the version is 3.13.16)
 
-PyTorch: *(need to fill this in — forgot to run `!pip show torch` in the Colab session before it recycled. Will grab this from the final clean run and put the exact version here before submitting.)*
+PyTorch: 2.14.1+cu130
 
-NumPy: *(same as above — to be filled from the final run)*
+NumPy: 2.4.6
 
-Pandas: *(same as above — to be filled from the final run)*
+Pandas: 2.2.3
 
-scikit-learn: used for `accuracy_score`, `f1_score`, and the confusion matrix — version also to be confirmed.
+Matplotlib: 3.10.0
+
+Seaborn: 0.13.2
+
+scikit-learn: 1.6.1
 
 ## Execution Order
 
 ### Run problem1.ipynb
 
-For the big-5 tasks in Problem 1, I split things up so debugging would be easier instead of having one giant notebook with everything inline. Basically I tried to follow Single Responsibility / Separation of Concerns — `problem1.ipynb` is just the "orchestrator": it calls functions and stitches results together, but the actual logic (data loading, model definitions, training loops, plotting) lives in separate `.py` files under `Problem1/modules/`. The notebook adds that folder to `sys.path` at the very top, so whoever runs this shouldn't need to do anything extra before executing — it works the same way whether it's opened locally or in Colab (there's a small `IN_COLAB` check at the top that mounts Google Drive only if needed).
+##### Project Structure
 
-**On the parameter-count / bias thing (this tripped me up for a bit, so documenting it properly):**
+Since I am still learning Deep Learning and working through multiple experiments, I found it easier to organize the code into smaller modules rather than putting everything into one large notebook. This made debugging and testing much more manageable.
 
-The assignment gives reference parameter counts for `h=64` as RNN=4,736 / LSTM=18,944 / GRU=14,208. When I first built my cells and counted parameters, mine came out *higher* than this (4,800 / 19,200 / 14,400), and I was worried I'd done something wrong. Turns out this is expected, and it comes down to how PyTorch structures its bias terms internally.
+The main notebook, `problem1.ipynb`, acts as the entry point for running the experiments. Most of the actual implementation is kept in separate Python files under `Problem1/modules/`, such as data loading, model definitions, training functions, evaluation logic, and plotting utilities. This helped me keep related functionality in one place and made the notebook easier to read.
 
-PyTorch's `nn.RNN` / `nn.LSTM` / `nn.GRU` each keep **two separate bias vectors per gate** — one for the input path (`bias_ih`) and one for the hidden path (`bias_hh`). But mathematically:
+To make execution straightforward, the notebook adds the module folder to `sys.path` at startup. I also included a small `IN_COLAB` check so that the same notebook can be run either locally or in Google Colab without requiring any manual code changes.
 
-x @ W_ih + b_ih + h @ W_hh + b_hh == x @ W_ih + h @ W_hh + (b_ih + b_hh)
+---
 
+##### Parameter Counts and Bias Terms
 
-So those two biases could always be combined into a single one without losing any model capacity — it's a redundant extra `h` parameters per gate that PyTorch keeps around anyway (probably for implementation reasons, e.g. cuDNN kernel compatibility, not because it needs them mathematically).
+One interesting thing I discovered while implementing the RNN, LSTM, and GRU cells was that my parameter counts did not initially match the values shown in the assignment. For a hidden size of `h = 64`, the assignment lists the following parameter counts:
 
-I deliberately built `MyRNNCell` / `MyLSTMCell` / `MyGRUCell` to copy PyTorch's structure exactly (both biases, same gate order) instead of using the "minimal" single-bias version. The reason: it makes the Step 5 weight-copying check dead simple — I just copy `weight_ih`, `weight_hh`, `bias_ih`, `bias_hh` straight across from the library layer with no risk of a subtle off-by-something mismatch (this matters especially for GRU, where the reset gate only multiplies the *hidden* bias, not the input one — a detail you genuinely can't collapse into a single bias term without rewriting the gate equations).
+| Model | Assignment Count |
+|---------|---------:|
+| RNN | 4,736 |
+| LSTM | 18,944 |
+| GRU | 14,208 |
 
-So my actual parameter counts (4,800 / 19,200 / 14,400) are slightly higher than the assignment's quoted numbers, and the difference is exactly `gates × h` in each case:
+However, when I calculated the parameters from my implementations and from PyTorch's built-in layers, I obtained:
+
+| Model | PyTorch Count |
+|---------|---------:|
+| RNN | 4,800 |
+| LSTM | 19,200 |
+| GRU | 14,400 |
+
+At first, I assumed I had made a mistake. After investigating further, I learned that PyTorch stores two bias vectors for each gate: one associated with the input transformation (`bias_ih`) and another associated with the hidden-state transformation (`bias_hh`).
+
+Mathematically, these two bias terms can often be combined into a single bias because:
+
+$$
+xW_{ih} + b_{ih} + hW_{hh} + b_{hh}
+=
+xW_{ih} + hW_{hh} + (b_{ih}+b_{hh})
+$$
+
+This means the extra bias vector does not necessarily increase the expressive power of the model, but PyTorch keeps both bias terms as part of its implementation.
+
+To make the verification task easier, I followed PyTorch's parameter layout exactly in my custom `MyRNNCell`, `MyLSTMCell`, and `MyGRUCell` implementations. This allowed me to directly copy `weight_ih`, `weight_hh`, `bias_ih`, and `bias_hh` from the corresponding PyTorch layers and compare outputs without introducing additional conversion logic.
+
+As a result, my parameter counts match PyTorch's values exactly. The difference between the assignment's theoretical counts and PyTorch's reported counts comes from the additional bias vectors maintained internally by PyTorch for each gate.
 
 | Model | Gates | My actual count | Assignment's "minimal" count | Difference (= gates × h) |
 |---|---|---|---|---|
@@ -84,60 +148,233 @@ and confirmed in code that `count_params(my_cell)` exactly matches the "actual" 
 
 ### Run problem2.ipynb
 
-Same philosophy as `problem1.ipynb`: the notebook is an orchestrator, the actual logic lives in `.py` files under `Problem2/modules/`, and the notebook adds that folder to `sys.path` at the top so it runs the same way locally or on Colab. Problem 2 ended up GPU-heavy enough (the character-level LM especially) that I moved to Colab's T4 runtime partway through, same as Problem 1.
+##### Project Structure
 
-**Step 2 — Attention from scratch (P2.1).** Scaled dot-product attention — `softmax(QK^T/√d_k)·V` — built from matrix operations only, no `nn.MultiheadAttention` anywhere near it. Unit tests: each row of the attention weights sums to 1 (softmax guarantee, but good to actually check); output matches `F.scaled_dot_product_attention` to 1.19e-07 (well inside the 1e-5 the assignment asks for); a causal mask zeroes out every future position, and the masked output matches PyTorch's own `is_causal=True` path to the same 1.19e-07. I also hand-worked a 3-token, d_k=2 toy example on paper (no instructor example was given, so I made one up: Q=K=[[1,0],[0,1],[1,1]], V=[[1,0],[0,1],[0.5,0.5]]) and checked the code against my hand arithmetic — max error 3.19e-05, so the two agree.
+For Problem 2, I followed the same approach that I used in Problem 1. The main notebook, `problem2.ipynb`, acts as the entry point for all experiments. The actual implementation is organised under `Problem2/modules/`, including attention layers, Transformer components, training utilities, evaluation functions, plotting helpers, and result management. This made the code easier to understand, test, and debug.As the language-modeling experiments became more computationally intensive, I eventually moved to a Colab T4 GPU runtime, similar to the training experiments in Problem 1.
 
-**Step 3 — Multi-head attention + pre-LN encoder block (P2.2).** `MultiHeadAttention` wraps the Step 2 attention core: it projects through `W_Q/W_K/W_V/W_O`, reshapes `d_model` into `n_heads × d_k`, runs attention per head, concatenates, and mixes with `W_O`. The encoder block is **pre-LayerNorm** (LayerNorm *before* each sub-layer, not after) — this is the GPT-style convention rather than the original 2017 Transformer's post-LN, and it keeps the residual stream cleaner across the 4-layer stack I'm using everywhere in Problem 2.
+---
 
-This is where I hit the same kind of "wait, my number doesn't match the assignment's" moment as the Problem 1 bias thing. The assignment gives a weights-only formula, `4d² + 2·d·d_ff`, and says that comes to 196,608 for d=128, d_ff=512 — and it does, exactly. But that formula doesn't count biases or LayerNorm parameters, so `sum(p.numel())` on a real `EncoderBlock` comes out higher:
+##### Step 2 – Attention From Scratch (P2.1)
+
+The first task was to implement scaled dot-product attention from scratch using only tensor and matrix operations. The implementation follows the standard equation:
+
+$$
+\text{Attention}(Q,K,V)=
+\text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V
+$$
+
+No use was made of `nn.MultiheadAttention` or any Transformer helper classes.
+
+To verify correctness, I added several unit tests:
+
+- Verified that each row of the attention matrix sums to 1.
+- Compared the output against `torch.nn.functional.scaled_dot_product_attention`.
+- Verified that the causal mask completely blocks access to future positions.
+- Compared the masked output against PyTorch's own causal attention implementation.
+
+The output matched PyTorch with a maximum error of approximately `1.19e-07`, which is significantly better than the assignment requirement of `1e-5`.
+
+Since no instructor-provided example was supplied, I created a simple three-token example using small Q, K, and V matrices and manually calculated the attention output. The output from my implementation matched the hand calculations with a maximum difference of approximately `3.19e-05`, providing additional confidence that the implementation was correct.
+
+---
+
+##### Step 3 – Multi-Head Attention and Encoder Block (P2.2)
+
+After completing scaled dot-product attention, I built a full multi-head attention module. The implementation projects the input through the query, key, value, and output matrices (`W_Q`, `W_K`, `W_V`, and `W_O`), splits the representation across multiple heads, applies attention independently within each head, concatenates the results, and then produces the final output projection.
+
+The encoder block was implemented using a pre-LayerNorm architecture, where Layer Normalization is applied before both the attention and feed-forward sublayers. Residual connections and dropout were also included.
+
+During this task I encountered a situation very similar to the parameter-count discrepancy observed in Problem 1.
+
+The assignment provides the following weight-only formula:
+
+$$
+4d^2 + 2dd_{ff}
+$$
+
+For:
+
+- \(d = 128\)
+- \(d_{ff} = 512\)
+
+the expected count is:
+
+| Component | Parameter Count |
+|------------|------------:|
+| Weights only | 196,608 |
+
+However, when I calculated the total number of trainable parameters using:
+
+```python
+sum(p.numel() for p in model.parameters())
+```
+
+the value was larger.
+
+After reviewing the implementation, I realised that the assignment formula counts only the weight matrices and excludes:
+
+- Attention biases
+- Feed-forward biases
+- LayerNorm scale parameters
+- LayerNorm shift parameters
+
+Accounting for all of these components produces the actual parameter count observed in code:
 
 | Component | Count |
-|---|---|
-| Weights only (4d² + 2·d·d_ff) | 196,608 |
-| + MHA biases (4d) | 512 |
-| + FFN biases (d_ff + d) | 640 |
-| + LayerNorm γ/β (2 norms × 2 × d) | 512 |
-| **Actual `sum(p.numel())` per block** | **198,272** |
+|------------|------------:|
+| Weights only | 196,608 |
+| Multi-head attention biases | 512 |
+| Feed-forward biases | 640 |
+| LayerNorm parameters | 512 |
+| **Total per encoder block** | **198,272** |
 
-Same lesson as the RNN/LSTM/GRU bias gap in Problem 1: the "clean" formula in the assignment is deliberately the weights-only part, and the gap (1,664 here) is fully accounted for once you add back biases and LayerNorm — I printed both numbers side by side in the notebook as the reconciliation check. The full 4-layer stack (my config: d=128, heads=4, d_ff=512) comes to 793,344 trainable parameters.
+This is kind of similar bias vector explanation of Problem 1: theoretical parameter formulas often focus on the main weight matrices, while framework-reported parameter counts include additional trainable components such as biases and normalization parameters.
 
-**Step 4 — HAR encoder classifier + positional-encoding ablation (P2.3).** Reused Problem 1's HAR data pipeline, subject-wise split, and generic `train_model`/`evaluate` loop completely unchanged — I wanted architecture to be the *only* thing different between this and the Problem 1 comparison. Instead of embedding all 128 time steps individually, I patchified each window into 16 patches of 8 steps (72 raw features per patch, per the assignment's "or each patch of 8 steps" option), linearly projected each patch to d=128, prepended a learned CLS token, and classified off the CLS token's final state — 17 tokens total, bidirectional (no causal mask, since classification should see the whole window).
+Using the chosen configuration (`d=128`, `heads=4`, `d_ff=512`), the complete four-layer Transformer contains **793,344 trainable parameters**.
 
-Ablated positional information (none / sinusoidal / learned), 3 seeds each, same 30-epoch budget as Problem 1's HAR runs:
+---
 
-| Positional encoding | Test acc | Macro-F1 | Std (acc) | Params | Sec/epoch |
-|---|---|---|---|---|---|
+##### Step 4 – HAR Transformer Classifier and Positional-Encoding Ablation (P2.3)
+
+For this task, I reused the same HAR preprocessing pipeline, data splits, normalization strategy, and training framework that were used in Problem 1. This ensured that any differences in performance were due to the model architecture rather than changes in data processing.
+
+Rather than processing all 128 time steps individually, I followed the assignment's patch-based option. Each HAR window was divided into 16 patches of 8 time steps each. Every patch was projected into a 128-dimensional representation, and a learned CLS token was prepended to the sequence. The classifier then used the final CLS embedding for prediction.
+
+To understand the contribution of positional information, I evaluated three configurations:
+
+| Positional Encoding | Test Accuracy | Macro-F1 | Accuracy Std | Parameters | Sec/Epoch |
+|---|---:|---:|---:|---:|---:|
 | None | 0.9216 | 0.9211 | 0.0040 | 803,590 | 1.33 |
 | Sinusoidal | 0.9102 | 0.9096 | 0.0057 | 803,590 | 1.34 |
 | Learned | 0.9077 | 0.9086 | 0.0155 | 805,766 | 1.36 |
-| **Best Problem 1 (GRU, seed 999)** | **0.9226** | **0.9228** | — | **14,790** | **0.257** |
+| **Best Problem 1 GRU** | **0.9226** | **0.9228** | — | **14,790** | **0.257** |
 
-The "none" result genuinely surprised me — I expected sinusoidal to at least tie it. My best explanation: with only 17 tokens and full bidirectional attention, there's very little order-ambiguity left for the model to resolve; the patches' own content probably already disambiguates their position well enough. The learned-PE variant also has noticeably higher seed-to-seed variance (std 0.0155 vs 0.0040 for none) — with only 30 epochs and ~2,176 extra parameters to learn from scratch, that part of the model seems to be the least reliably trained. And the headline comparison: the best transformer here is basically tied with the best Problem 1 GRU on accuracy, but needs **54× more parameters** and **~5.2× more time per epoch** — for short, low-dimensional sensor windows like this, the small recurrent model is just a much better accuracy-per-parameter deal.
+One result that genuinely surprised me was that the model without positional encoding performed best. My initial expectation was that sinusoidal encoding would improve performance. A possible explanation is that with only 17 total tokens (16 patches plus CLS), patch contents may already carry enough information for the model to identify relative positions.
 
-**Step 5 — Character-level causal LM on Tiny Shakespeare (P2.4).** Tiny Shakespeare is 1,115,394 characters, confirmed exactly 65 distinct characters in code. Split 90/10 by position (not shuffled — shuffling a language-modeling stream would leak future context into earlier windows), giving 1,003,854 train / 111,540 val characters. Model: causal 4-layer encoder, d=128, 4 heads, context window 128, sinusoidal PE, 810,049 total parameters, trained 5,000 iterations with AdamW (lr=3e-4).
+The learned positional-encoding variant also displayed noticeably larger variation across random seeds. This suggests that learning positional embeddings from scratch within the available training budget may be less stable than relying directly on patch content.
 
-Validation loss fell smoothly and landed at **1.6024 nats** (2.3118 bits/char) — right in the assignment's 1.5–1.8 sanity range, and well below the uniform-guess baseline of ln(65) = 4.1744 nats:
+The most interesting comparison was against the best GRU model from Problem 1. Both approaches achieved nearly identical classification performance, but the Transformer required approximately **54 times more parameters** and roughly **five times longer training per epoch**. For this particular sensor-classification task, the GRU appears to provide a significantly better accuracy-to-complexity trade-off.
 
-| Iteration | Val loss (nats) | Bits/char |
-|---|---|---|
+---
+
+##### Step 5 – Character-Level Language Model on Tiny Shakespeare (P2.4)
+
+The Tiny Shakespeare dataset contains 1,115,394 characters and, as expected, exactly 65 unique characters when processed programmatically.
+
+Following the assignment instructions, I performed a 90/10 split without shuffling:
+
+- Training characters: 1,003,854
+- Validation characters: 111,540
+
+The final model configuration was:
+
+- Context length = 128
+- Layers = 4
+- Heads = 4
+- Model dimension = 128
+- Sinusoidal positional encoding
+- Total parameters = 810,049
+
+Training was performed for 5,000 iterations using AdamW with a learning rate of `3e-4`.
+
+The validation loss decreased steadily throughout training and converged to:
+
+| Iteration | Validation Loss (nats) | Bits/Char |
+|---|---:|---:|
 | 500 | 2.1698 | 3.1303 |
-| 1,500 | 1.8497 | 2.6686 |
-| 3,000 | 1.6828 | 2.4278 |
-| 5,000 | 1.6024 | 2.3118 |
+| 1500 | 1.8497 | 2.6686 |
+| 3000 | 1.6828 | 2.4278 |
+| 5000 | 1.6024 | 2.3118 |
 
-Generated 500 characters at three temperatures (top-k=40 — the assignment doesn't pin down k, so I picked a standard value and noted it as an assumption):
-- **T=0.2**: grammatically plausible but stuck in loops on filler words ("the the state... shall be the shall be") — low temperature sharpens the distribution so much the model keeps picking its favorite continuation over and over.
-- **T=0.8**: the best balance by far — correct play-script structure (character names in caps followed by a colon, e.g. "HENRY BOLINGBROKE:"), varied vocabulary, reasonable rhythm.
-- **T=1.5**: noisy and mostly incoherent (invented words like "muddital", "brunkshic"), though it still loosely keeps the play-script shape.
+The final loss of **1.6024 nats** falls comfortably within the sanity range suggested in the assignment and is significantly better than the random baseline of:
 
-**Step 6 — Analysis and ablations (P2.5).**
-- **(a) Attention heatmaps** — two heads, layer 0, on "To be, or not to be: that is the question" (43 characters). Both heads show mostly local/near-diagonal attention plus a bright column at position 0 (every later position gives some weight back to the first token — a common "attention sink" pattern in causal transformers). Mean attention-weighted distance |i−j|: Head 0 = 2.39, Head 1 = 2.20 — Head 0 slightly more long-range, but neither is doing dramatic long-distance attention yet, which makes sense for an early layer.
-- **(b) Heads = 1/4/8** at fixed d=128, matched 2,000-iteration budget: val loss 1.7592 / 1.7638 / 1.7837 nats respectively, with sec/500-iters climbing from 14.1s to 21.0s as heads increase. Important catch here: all three configurations have the *exact same* parameter count (810,049) — more heads doesn't add capacity, it just changes how the fixed-size `W_Q/K/V/O` projections get split into smaller attention sub-spaces. Fewer heads trained faster and reached marginally lower loss in this short budget, though I'd want a longer run before calling that a general result rather than a budget artifact.
-- **(c) Removing the causal mask** (same 2,000-iter budget): causal val loss stayed at 1.7638 nats; no-mask collapsed to 0.0185 nats. That number looked suspiciously good, and it is — without the mask, position t can attend directly to position t+1, which is literally its own training target. The model learned to copy the future instead of predicting it, a shortcut that only exists during training (the whole sequence is visible at once) and vanishes at generation time (there is no future token yet). Confirmed by generation: the causal model produced readable play-script-like text; the no-mask model produced an endless repeat of the single character "O". Good concrete reminder that a low training loss doesn't automatically mean a working model.
-- **(d) Time/memory vs context length** (T = 64/128/256/512, batch=16): time-per-step went 16.1→15.3→20.8→58.2 ms, peak memory went 110.6→160.5→297.7→751.9 MB. Going from T=64 to T=512 is an 8× increase in context length, but only ~3.6× more time and ~6.8× more memory — both far below the 64× (8²) a pure O(n²·d) attention cost would predict. At these context lengths and this model size, the costs that scale only linearly with T (embeddings, the W_Q/K/V/O and feed-forward projections) still make up most of the total; the quadratic attention term is there (the growth is clearly super-linear, especially T=256→512) but it would only dominate outright at much larger context lengths than tested here.
+$$
+\ln(65) \approx 4.1744
+$$
 
-**One engineering decision worth calling out:** Problem 1's `append_result_row()` always appends to `results.csv`, which is fine if you only ever run each cell once, but Problem 2 involves re-running individual ablation arms (fixing a bug, bumping iteration counts, etc.) on Colab, and a plain append would have left duplicate rows every time I re-ran something. So Problem 2 uses its own `upsert_result_row()` (in `Problem2/modules/results_io.py`) that replaces any existing row with the same `(problem, model, seed, seq_len)` key instead of blindly appending — verified with a small self-test (write two keys, re-write one with a different value, confirm the row count stays at 2 and the value actually changed) before trusting it on real runs.
+For text generation, I produced samples at three temperatures using top-k sampling (`k=40`).
+
+###### Temperature = 0.2
+
+The generated text was grammatically reasonable but often repetitive. The model tended to repeatedly select highly probable words and phrases.
+
+###### Temperature = 0.8
+
+This produced the most balanced output. The generated text maintained Shakespeare-like structure, character names, and dialogue formatting while remaining diverse.
+
+###### Temperature = 1.5
+
+The generated text became much more creative but significantly less coherent. Many invented words appeared, and grammatical consistency decreased noticeably.
+
+---
+
+##### Step 6 – Analysis and Ablations (P2.5)
+
+###### Attention Heatmaps
+
+Attention visualisations were generated from two attention heads in the first encoder layer using the sentence:
+
+> "To be, or not to be: that is the question"
+
+Both heads focused primarily on nearby characters and neighbouring positions. A strong attention pattern also appeared around the first token, indicating that many later positions repeatedly referenced the beginning of the sequence.
+
+Overall, the visualisations suggest that lower Transformer layers concentrate mainly on local context before higher layers construct more abstract representations.
+
+###### Number of Attention Heads
+
+To study the effect of head count, I compared 1, 4, and 8 attention heads while keeping the overall model dimension fixed.
+
+| Heads | Validation Loss (nats) |
+|---|---:|
+| 1 | 1.7592 |
+| 4 | 1.7638 |
+| 8 | 1.7837 |
+
+One observation I found particularly interesting is that the total parameter count remains unchanged when the number of heads changes. Increasing the number of heads simply partitions the same representation space differently.
+
+Under the fixed training budget used here, the smaller-head configurations trained slightly faster and achieved marginally lower losses.
+
+###### Removing the Causal Mask
+
+The impact of removing the causal mask was dramatic.
+
+| Configuration | Validation Loss (nats) |
+|---|---:|
+| Causal Mask | 1.7638 |
+| No Mask | 0.0185 |
+
+Initially this looked like a huge improvement, but the result is misleading. Without the causal mask, the model can directly view future characters during training and effectively learns to copy the answer rather than predict it.
+
+This became obvious when generating text. While the masked model produced readable Shakespeare-like output, the model trained without masking generated highly repetitive and unusable sequences.
+
+This experiment demonstrated why the causal mask is essential in autoregressive language modeling.
+
+###### Context-Length Scaling
+
+The final study measured execution time and memory consumption across different context lengths.
+
+| Context Length | Time/Step (ms) | Peak Memory (MB) |
+|---|---:|---:|
+| 64 | 16.1 | 110.6 |
+| 128 | 15.3 | 160.5 |
+| 256 | 20.8 | 297.7 |
+| 512 | 58.2 | 751.9 |
+
+Both memory usage and execution time increased as the sequence length grew. Although the observed growth was not yet fully quadratic, the trend clearly reflected the increasing cost of attention computation.
+
+From this experiment, I gained a practical appreciation for one of the main limitations of Transformer models: while they are powerful and flexible, their computational cost increases rapidly as longer contexts are used.
+
+---
+
+##### Engineering Note
+
+One practical issue encountered during experimentation was managing repeated runs on Google Colab.
+
+In Problem 1 I used a simple function that always appended new rows to `results.csv`. However, Problem 2 required frequent reruns while fixing bugs and tuning training configurations. Blindly appending results would have created duplicate records and made analysis difficult.
+
+To address this, I implemented an `upsert_result_row()` helper that updates an existing result if the same `(problem, model, seed, seq_len)` combination already exists. A small self-test was used to verify that existing rows were correctly replaced rather than duplicated.
+
+Although this was a relatively small implementation detail, it significantly improved result tracking and helped keep the experiment logs clean and reproducible.
 
 ## Results
 
@@ -163,9 +400,9 @@ Generated 500 characters at three temperatures (top-k=40 — the assignment does
 
 ## Runtime
 
-**HAR:** Data source is [UCI HAR Dataset](https://archive.ics.uci.edu/dataset/240/humanactivityrecognitionusingsmartphones), auto-downloaded and extracted by the notebook on first run (no manual download needed). 9 training runs (3 models × 3 seeds), 30 epochs each — a few minutes total on a T4 GPU.
+**HAR:** Data source is [UCI HAR Dataset](https://archive.ics.uci.edu/dataset/240/humanactivityrecognitionusingsmartphones)
 
-**tiny_shakespere:** <<need to fill>>
+**tiny_shakespere:** The data is download from [github source](https://github.com/karpathy/char-rnn/blob/master/data/tinyshakespeare/input.txt)
 
 **Adding Problem:** 36 runs (3 models × 4 sequence lengths × 3 seeds). Epoch budget scales with T (60/80/120/150 epochs for T=50/100/200/400) rather than a flat number for every T — longer sequences seemed to need more updates to actually converge, especially the gated models. This took noticeably longer than the HAR runs.
 
@@ -173,29 +410,206 @@ Generated 500 characters at three temperatures (top-k=40 — the assignment does
 
 **Transformer (Problem 2):** All of Problem 2 ran on Colab's T4. The HAR-encoder ablation (9 runs, 30 epochs each at ~1.33–1.36s/epoch) took roughly 6–7 minutes total. The main character-LM run (5,000 iterations at ~17.6s per 500-iteration block) took about 3 minutes. The heads ablation (3 runs × 2,000 iterations) and the no-mask ablation (2 runs × 2,000 iterations) added roughly 3.5 and 2 minutes respectively. The context-length timing/memory sweep is just a handful of forward/backward passes per context length and finished in seconds. Rough total for Problem 2: somewhere around 15–20 minutes on a T4, noticeably faster than Problem 1's RNN/LSTM/GRU sweep despite the transformer models having far more parameters — short training budgets (30 epochs / a few thousand iterations) rather than long ones, and a lot of the Problem 2 runs are small ablations rather than full sweeps.
 
-Rough total for everything done so far in Problem 1: somewhere around 45–60 minutes on a Colab T4, across all the steps combined.
+Rough total for everything done so far in Problem 1: somewhere around 55–90 minutes on a Colab T4, across all the steps combined.
 
 ## Assumptions
+There were a few places where the assignment did not provide a fixed value or a detailed instruction. In those cases, I made reasonable decisions and documented them here for clarity and reproducibility.
 
-Things the assignment didn't pin down exactly, so I made a call and I'm noting it here so it's not a mystery later:
+### 1. Hidden Size, Model Dimension, and Random Seeds
 
-1. **Hidden size / model width / seeds:** chosen myself (h=64, d=128, seeds 42/123/999) per the Prof's instruction to ignore the variants table.
-2. **Adding-problem epoch budget:** scaled by T instead of using one flat epoch count for all four lengths — `{50: 60, 100: 80, 200: 120, 400: 150}`. Reasoning: a budget sized for T=50 would badly undertrain T=400, and a budget sized for T=400 would waste a lot of time re-running T=50 way longer than it needs.
-3. **Gradient-norm analysis batch size:** used a fixed batch of 256 test sequences at T=100 (not the full 1,000-sequence test set) for computing `||∂L/∂h_t||`. The rubric doesn't specify a sample size here — 256 felt like a reasonable middle ground between a smooth/stable averaged curve and not being wasteful about it.
-4. **Individual ablation choice:** my student ID ends in 6, which is even, so per the (original, ID-based) ablation rule that's gradient clipping (norm 1.0 vs. none) for the vanilla RNN at T=200. I double-checked this still applies even after the Prof's instruction to self-choose h/d/seeds, since that instruction only explicitly mentioned ignoring the variants table and the h/width/seeds FAQ entry — not the ablation-selection rule, which lives in the same "Individualisation" section but wasn't named directly. Went with the narrower reading (keep the original ablation assignment) since that was the safer interpretation.
-5. **"Best HAR model" selection metric:** used macro-F1 rather than raw accuracy to pick the "best" run for the confusion-matrix figure, since macro-F1 is the fairer metric across 6 somewhat-imbalanced activity classes. This is called out explicitly in the report.
-6. **Positional-encoding ablation epoch budget:** kept at 30 epochs for all three variants (none/sinusoidal/learned), matching Problem 1's HAR budget exactly, so the Problem 1-vs-Problem 2 comparison stays apples-to-apples.
-7. **Top-k for generation:** the assignment says "top-k sampling" without specifying k; I used top-k=40 for all three temperature samples.
-8. **Heads (1/4/8) and no-mask ablations use a reduced, matched 2,000-iteration budget**, not the main P2.4 run's 5,000 — this keeps the ablation arms comparable to each other, but their absolute validation-loss numbers aren't directly comparable to the headline P2.4 result (which used the full 5,000-iteration budget).
-9. **Tiny Shakespeare train/val split:** a contiguous 90/10 split by character position, not a random shuffle — shuffling would leak future characters into earlier training windows, which doesn't make sense for a next-character-prediction task.
+Following the instructor's clarification to ignore the variants table, I selected my own experimental settings:
+
+- Hidden size (`h`) = 64
+- Transformer model dimension (`d`) = 128
+- Random seeds = 42, 123, and 999
+
+These values were used consistently throughout the assignment unless otherwise stated.
+
+---
+
+### 2. Adding-Problem Training Budget
+
+The assignment does not specify the number of training epochs for each sequence length. Instead of using the same epoch count for all values of `T`, I adjusted the training budget based on sequence length:
+
+| Sequence Length (T) | Epochs |
+|---|---:|
+| 50 | 60 |
+| 100 | 80 |
+| 200 | 120 |
+| 400 | 150 |
+
+My reasoning was that longer sequences generally require more training to converge. Using a very small budget for all values would likely under-train the larger sequence lengths, while using the largest budget everywhere would unnecessarily increase runtime for shorter sequences.
+
+---
+
+### 3. Gradient-Norm Analysis Sample Size
+
+For the gradient analysis in Problem 1, I used a fixed batch of 256 test sequences at `T = 100` when computing:
+
+$$
+\left\|\frac{\partial L}{\partial h_t}\right\|
+$$
+
+The assignment does not specify how many samples should be used for this analysis. I chose 256 examples because it provided a stable average gradient profile while keeping the computation reasonably efficient.
+
+---
+
+### 4. Individual Ablation Selection
+
+My student ID ends in **6**, which is an even number.
+
+Based on the assignment instructions, I therefore performed the **gradient clipping ablation**:
+
+- Gradient clipping (norm = 1.0)
+- No gradient clipping
+
+using the vanilla RNN on the adding problem with `T = 200`.
+
+Although the instructor later removed the hidden-size and seed variants, the ablation rule was not explicitly changed. For that reason, I retained the original even/odd ablation assignment.
+
+---
+
+### 5. Selection of the Best HAR Model
+
+Where the assignment required identifying the best HAR model, I used **Macro-F1 Score** as the primary selection metric rather than overall accuracy.
+
+Since the HAR dataset contains six activity classes with some class imbalance, Macro-F1 provides a more balanced assessment of performance across all classes. The confusion matrix shown in the report therefore corresponds to the run with the highest Macro-F1 score.
+
+---
+
+### 6. Positional-Encoding Ablation Budget
+
+For the Transformer classifier in Problem 2, all positional-encoding variants were trained using the same budget:
+
+- No positional encoding
+- Sinusoidal positional encoding
+- Learned positional encoding
+
+Each configuration was trained for **30 epochs**, matching the HAR training budget used in Problem 1. This was done to ensure a fair comparison between the different architectures.
+
+---
+
+### 7. Top-k Sampling Configuration
+
+The assignment specifies the use of top-k sampling for text generation but does not provide a value for `k`.
+
+I selected:
+
+```text
+top-k = 40
+```
+
+for all generated samples. The same value was used consistently for every temperature setting to ensure comparability.
+
+---
+
+### 8. Ablation Training Budget for Transformer Experiments
+
+The Transformer head-count experiment (`1`, `4`, and `8` heads) and the causal-mask ablation were trained using a reduced budget of **2,000 iterations** instead of the full **5,000 iterations** used for the main language-model experiment.
+
+This allowed all ablation configurations to be compared under identical conditions while keeping the total runtime manageable.
+
+As a result, the validation losses reported in the ablation experiments should be compared only against each other and not directly against the final language-model result obtained after the full 5,000-iteration training run.
+
+---
+
+### 9. Tiny Shakespeare Train/Validation Split
+
+The Tiny Shakespeare dataset was divided into:
+
+- First 90% of characters → Training set
+- Last 10% of characters → Validation set
+
+No shuffling was performed.
+
+This follows the assignment specification and is appropriate for next-character prediction tasks. Random shuffling would allow future text to appear in earlier training windows, which would not reflect the true language-modeling setting.
 
 ## Known Limitations
 
-- **Gradient clipping didn't actually help the vanilla RNN at T=200** — clipped-run MSE (0.173 ± 0.008) came out essentially the same as the no-clipping baseline (0.171 ± 0.005), both stuck near the 0.167 constant-prediction floor. My read on this: the RNN's problem here is genuine vanishing gradient (signal disappearing before it reaches the early marker), not gradient explosion, so clipping the gradient norm doesn't address the actual bottleneck.
-- **All three architectures show essentially zero gradient at t=1 by the time you're 100 steps back** (both before and after training) — so even LSTM/GRU aren't literally preserving gradient all the way back; they just seem to still learn the task through some other mechanism (maybe shorter effective dependencies, or very well-tuned local dynamics), which is a bit different from the "gates solve vanishing gradients" story I expected going in.
-- **LSTM starts to struggle at T=400** (only 1 of 3 seeds solved, vs. 3/3 for GRU at the same length) — so even among the gated models, GRU came out more consistently robust as sequence length grows, at least in this setup.
-- **The HAR transformer encoder ties the best Problem 1 GRU on accuracy (0.9216 vs 0.9228) but costs 54× more parameters and ~5.2× more time per epoch** — for short, low-dimensional sensor windows like HAR, the small recurrent model is clearly the better accuracy-per-parameter trade; the transformer isn't "wrong," it's just the wrong tool for data this small and this short.
-- **The heads ablation (1/4/8) used a short, matched 2,000-iteration budget for a fair comparison across arms**, so the "fewer heads did slightly better" result should be read as a short-budget observation, not a general claim — a longer run might change the ordering once each configuration has had time to actually specialize its heads.
-- **The no-mask ablation's near-zero validation loss (0.0185 nats) is not evidence of a better language model** — it's the model exploiting a shortcut (attending directly to its own training target) that only exists because the mask is missing; the generation test confirms this cleanly, since the no-mask model produces degenerate output ("OOOO...") while the causal model doesn't.
-- **Measured time/memory growth with context length is clearly super-linear but well below the naive O(T²) curve in the tested range (T=64–512)** — at this model size (d=128, 4 layers), linear-in-T costs still make up a large share of the total; the quadratic attention term would likely dominate only at much larger context lengths than were tested here.
-- The trained models reside in the Gdrive as those are generated in the Colab and I have not downloaded.
+During the course of this assignment, I observed a few limitations and results that were different from my initial expectations. These observations are noted here to provide proper context when interpreting the reported results.
+
+### 1. Gradient Clipping Had Limited Impact on RNN Performance
+
+For the adding problem at `T = 200`, gradient clipping (norm = 1.0) did not lead to a noticeable improvement in the vanilla RNN.
+
+| Configuration | Test MSE |
+|---|---:|
+| No Clipping | 0.171 ± 0.005 |
+| Clipping (Norm = 1.0) | 0.173 ± 0.008 |
+
+Both configurations remained close to the constant-prediction baseline of approximately 0.167. Based on these results, it appears that the main difficulty for the RNN is the loss of useful gradient information over long sequences rather than occasional gradient explosions. As a result, gradient clipping alone was not sufficient to improve performance.
+
+---
+
+### 2. Long-Range Gradients Become Extremely Small for All Models
+
+The gradient-norm analysis showed that gradients become extremely small when propagated far back in time. This behaviour was visible in all three architectures, including LSTM and GRU.
+
+Before starting the assignment, I expected the gated models to completely solve the vanishing-gradient problem. However, the results suggest a more nuanced picture. While LSTM and GRU still learn the task successfully, they do not appear to preserve strong gradients across the entire sequence. Instead, the gating mechanisms seem to help the models retain useful information more effectively during training, even when gradients become small at distant time steps.
+
+---
+
+### 3. LSTM Performance Declined at the Longest Sequence Length
+
+For the adding problem with `T = 400`, the LSTM model showed reduced consistency across random seeds.
+
+| Model | Solved Runs |
+|---|---:|
+| LSTM | 1 / 3 |
+| GRU | 3 / 3 |
+
+While both gated architectures performed significantly better than the vanilla RNN, GRU was the more reliable model at the longest sequence length evaluated in this assignment.
+
+---
+
+### 4. Transformer Performance Came at a Much Higher Cost
+
+The Transformer encoder achieved classification performance very similar to the best GRU model on the HAR dataset.
+
+| Model | Accuracy | Parameters |
+|---|---:|---:|
+| Best GRU | 0.9228 | 14,790 |
+| Best Transformer | 0.9216 | 803,590 |
+
+Although the accuracy difference was minimal, the Transformer required approximately 54 times more parameters and significantly more training time per epoch.
+
+For short sensor sequences such as HAR, the recurrent models provided a much better balance between performance and computational cost.
+
+---
+
+### 5. Head-Count Ablation Used a Reduced Training Budget
+
+The comparison between 1, 4, and 8 attention heads was performed using a matched training budget of 2,000 iterations for all configurations.
+
+Under this budget, the smaller-head configurations achieved slightly lower validation losses. However, these results should be interpreted carefully. A longer training run may lead to different outcomes once each configuration has had more opportunity to converge.
+
+---
+
+### 6. Very Low Loss Without a Causal Mask Was Misleading
+
+Removing the causal mask produced an extremely small validation loss.
+
+| Configuration | Validation Loss (nats) |
+|---|---:|
+| Causal Mask | 1.7638 |
+| No Mask | 0.0185 |
+
+At first glance this appears to be a major improvement. However, the result is not representative of a genuine language model because the model can directly observe future characters during training.
+
+This became clear during text generation. The masked model generated coherent Shakespeare-like text, whereas the no-mask model produced highly repetitive and unusable outputs. This experiment demonstrated the importance of evaluating models using both quantitative metrics and qualitative behaviour.
+
+---
+
+### 7. Context-Length Scaling Was Not Fully Quadratic
+
+The time and memory measurements increased as context length grew, but the observed growth was lower than the simple theoretical expectation of pure quadratic scaling.
+
+A likely explanation is that, for the tested model size (`d = 128`, 4 layers), several components of the network still contribute significant linear computation costs. The quadratic attention cost becomes increasingly important as the context grows, but it does not completely dominate within the range of context lengths evaluated in this assignment.
+
+---
+
+### 8. Model Checkpoints Are Not Included
+
+The assignment instructions explicitly state that trained model checkpoints should not be included in the final submission.
+
+Most training runs were executed using Google Colab, and the resulting model checkpoints were stored in Google Drive during experimentation. These checkpoint files were not downloaded or included in the repository or final submission package. All reported results can be reproduced by running the provided notebooks with the documented configurations and random seeds.
